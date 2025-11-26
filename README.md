@@ -19,6 +19,3 @@ This repository contains an R script for comprehensive analysis of multi-sample 
 - R (version 4.x or higher)
 - Packages: Seurat, SeuratDisk, DoubletFinder, scDblFinder, SingleR, celldex, patchwork, tidyverse, ggplot2, gridExtra, SoupX, scran, ggridges, decontX, celda, SeuratData, presto, DropletUtils, clustree, pheatmap, and dependencies
 
-## Usage
-
-1. Clone or download the repository:  
