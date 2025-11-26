@@ -187,10 +187,6 @@ plot1 + plot2
 seu <- subset(seu, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
 
 
-
-
-
-
 #--------------------------#
 # 3. Normalization & Feature Selection
 #--------------------------#
@@ -413,11 +409,9 @@ ggplot(df_both, aes(x = seurat_clusters, y = expr, fill = stage)) +
   labs(y = "Expression", x = "Cluster")
 
 
-
 #--------------------------#
 # 5. Cell Cycle Scoring
 #--------------------------#
-
 
 feat_s <- cc.genes$s.genes
 feat_g2m <- cc.genes$g2m.genes
@@ -440,8 +434,6 @@ dat$Phase <- factor(dat$Phase, levels = c("G1", "S", "G2M"))
 
 ggplot(dat, aes(x = Phase, y = score, fill = Phase)) + geom_violin() + labs(x = "",
                                                                             y = "Score", fill = "Phase") + facet_wrap(~cat) + theme_classic()
-
-
 
 #--------------------------#
 # 6. Doublet Detection
@@ -537,7 +529,6 @@ seu_integrated <- RunUMAP(seu_integrated, dims = 1:30)
 # Visualize
 DimPlot(seu_integrated, group.by = "Patient")
 DimPlot(seu_integrated, group.by = "Type")
-
 
 
 #--------------------------#
@@ -674,8 +665,6 @@ DimPlot(seu_filt, group.by = "cluster_byDefault", label = TRUE, pt.size = 0.2) +
   NoLegend() + ggtitle("Default Clusters")
 
 
-
-
 P3 <- DimPlot(seu_filt, group.by = "Patient", pt.size = 0.2)
 P4 <- DimPlot(seu_filt, group.by = "Type", pt.size = 0.2)
 
@@ -701,8 +690,6 @@ ggplot(df_summary, aes(x = Patient, y = mean_expr, fill = Type)) +
   theme_classic() +
   labs(x = "Patient", y = paste("Mean expression of", gene_of_interest), fill = "Type") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-
 
 
 #_______Bar plot of cells per cluster per Type
@@ -817,11 +804,9 @@ ggplot(df_summary, aes(x = Patient, y = mean_expr, fill = cellType_byClust)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 
-
 #==========================#
 # 11. Annotate clusters to known Markers
 #==========================#
-
 
 #________________Evaluate known marker genes expression________________#
 
@@ -947,248 +932,4 @@ table(deg$sig)
 ggplot(deg, aes(x = avg_log2FC, y = -log10(p_val_adj), color = sig)) + geom_point() +
   scale_color_manual(values = c("red", "grey", "blue")) + labs(x = "log2_Fold-Changes",
                                                                y = "-log10_adjPV", color = "") + theme_classic()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#______________________WITH RAW DATA____________________#
-setwd("E:/scRNA-seq/trial/raw")
-
-library(DropletUtils)
-
-#untar("10k_PBMC_3p_nextgem_Chromium_Controller_raw_feature_bc_matrix.tar.gz")
-raw_mtx <- Seurat::Read10X("raw_feature_bc_matrix")
-dim(raw_mtx)
-
-bcrank <- barcodeRanks(raw_mtx)
-head(bcrank, 2)
-
-#Knee plot
-uniq <- !duplicated(bcrank$rank)
-bcrank <- bcrank[uniq, ]
-knee <- metadata(bcrank)$knee
-message(paste0("knee point: ", knee))
-inflection <- metadata(bcrank)$inflection
-message(paste0("inflection point: ", inflection))
-
-ggplot(as.data.frame(bcrank), aes(x = rank, y = total)) + 
-  geom_point() + 
-  geom_hline(yintercept = knee)
-
-# Detect empty droplets
-# We can detect empty droplets with DropletUtils::emptyDrops()
-
-e.out <- emptyDrops(raw_mtx)
-e.out <- e.out[order(e.out$FDR), ]
-head(e.out)
-
-ggplot(as.data.frame(e.out), aes(x = Total)) + geom_histogram() + geom_vline(xintercept = knee,
-                                                                             color = "red", linetype = "dashed") + labs(x = "UMI counts per cell", y = "Frequency") +
-  scale_y_continuous(trans = "log10") + scale_x_continuous(trans = "log10") + theme_classic()
-
-table(e.out$FDR < 0.001)
-
-cell_sel <- rownames(e.out)[e.out$FDR < 0.001]
-filt_mtx <- raw_mtx[, colnames(raw_mtx) %in% cell_sel]
-
-#_________________________ Ambient RNA evaluation ______________________________#
-
-#The cell-free RNA molecules randomly spread in the solution. It can be enclosed into droplets during the steps of library preparation. So, it would be falsely increase the UMI counts of genes.
-#Ambient RNAs present two signature:
-#_1. The majority are found in the empty droplets population.
-#_2.No specificity. This contamination can make a single cell look like it expresses two (or more) mutually exclusive marker genes.
-#According to these two properties, we could estimate ambient RNA contamination rates and correct it. 
-
-####how to correct ambient RNA contamination with DropletUtils and SoupX, respectively.
-
-amb <- metadata(e.out)$ambient[, 1]
-head(amb)
-
-
-#filt_mtx <- Seurat::Read10X("filtered_feature_bc_matrix")
-
-filt_mtx_drop <- filt_mtx[rownames(filt_mtx) %in% names(amb), ]
-seu <- CreateSeuratObject(filt_mtx_drop)
-
-
-
-
-
-#Create some functions-1
-data_proc <- function(seu) {
-  seu <- NormalizeData(seu, normalization.method = "LogNormalize", scale.factor = 10000)
-  seu <- FindVariableFeatures(seu, select.method = "vst", nfeatures = 2000)
-  return(seu)
-}
-
-#Create some functions-2
-quick_clust <- function(seu) {
-  set.seed(42)
-  seu <- ScaleData(seu, verbose = FALSE)
-  seu <- RunPCA(seu, npcs = 30, verbose = FALSE)
-  seu <- RunUMAP(seu, reduction = "pca", dims = 1:10, verbose = FALSE)
-  seu <- FindNeighbors(seu, reduction = "pca", dims = 1:10, verbose = FALSE)
-  seu <- FindClusters(seu, resolution = 0.5, verbose = FALSE)
-  return(seu)
-}
-
-
-seu <- data_proc(seu)
-seu <- ScaleData(seu)
-seu <- quick_clust(seu)
-sce <- as.SingleCellExperiment(seu, assay = "RNA")
-
-plotUMAP(sce, colour_by = "seurat_clusters")
-
-seu_list <- list()
-seu_list[["woCorr"]] <- seu
-
-out <- removeAmbience(counts(sce), ambient = amb, groups = sce$seurat_clusters)
-rownames(out) <- rownames(sce)
-colnames(out) <- colnames(sce)
-
-
-seu_list[["withCorr"]] <- CreateSeuratObject(out)
-seu_list[["withCorr"]] <- data_proc(seu_list[["withCorr"]])
-seu_list[["withCorr"]] <- ScaleData(seu_list[["withCorr"]])
-seu_list[["withCorr"]] <- quick_clust(seu_list[["withCorr"]])
-
-# Evaluate with marker genes
-#1.  UMAP without ambient RNA correction
-
-DimPlot(seu_list$woCorr, group.by = "seurat_clusters", pt.size = 0.1, label = TRUE) +
-  NoLegend()
-
-#2. UMAP wit ambient RNA correction.
-
-DimPlot(seu_list$withCorr, group.by = "seurat_clusters", pt.size = 0.1, label = TRUE) +
-  NoLegend()
-
-# Evaluate with marker genes
-mark_gene <- c("CCR7", "CD8A", "MS4A1", "CD14")
-mark_gene
-
-#1.violin plot in the uncorrected data.
-
-# Extract object safely from list
-seu <- seu_list[["woCorr"]]
-
-# Set assay (important for Seurat v5)
-DefaultAssay(seu) <- "RNA"
-
-#Fetch data (expression + clusters)
-df <- FetchData(seu, vars = c("seurat_clusters", mark_gene))
-
-#Convert to long format
-df_long <- df %>%
-  pivot_longer(
-    cols = all_of(mark_gene),
-    names_to = "gene",
-    values_to = "expression"
-  )
-
-#Plot with ggplot2
-ggplot(df_long, aes(x = seurat_clusters, y = expression, fill = seurat_clusters)) +
-  geom_violin(trim = FALSE) +
-  geom_boxplot(width = 0.12, outlier.shape = NA, color = "black") +
-  facet_wrap(~ gene, scales = "free_y", ncol = 4) +
-  theme_classic(base_size = 12) +
-  theme(
-    strip.background = element_rect(fill = "grey90"),
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "none"
-  ) +
-  labs(x = "Cluster", y = "Expression")
-
-##2.violin plot in the corrected data.
-
-seu <- seu_list[["withCorr"]]
-DefaultAssay(seu) <- "RNA"
-
-df <- FetchData(seu, vars = c("seurat_clusters", mark_gene))
-
-
-df_long <- df %>%
-  pivot_longer(
-    cols = all_of(mark_gene),
-    names_to = "gene",
-    values_to = "expression"
-  )
-
-
-ggplot(df_long, aes(x = seurat_clusters, y = expression, fill = seurat_clusters)) +
-  geom_violin(trim = FALSE) +
-  geom_boxplot(width = 0.15, color = "black", outlier.shape = NA) +
-  facet_wrap(~ gene, scales = "free_y", ncol = 4) +
-  theme_classic(base_size = 12) +
-  theme(
-    strip.background = element_rect(fill = "grey90"),
-    legend.position = "none",
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  ) +
-  labs(x = "Cluster", y = "Expression")
-
-
-
-#====================== RAW DATA WORKFLOW  ======================#
-setwd("E:/scRNA-seq/trial/raw")
-# safer raw read (preserves empty droplet barcodes)
-library(DropletUtils)
-raw_sce <- read10xCounts("raw_feature_bc_matrix", col.names = TRUE)
-
-# counts matrix (sparse matrix)
-raw_counts <- assay(raw_sce, "counts")
-# ensure column names are full barcodes
-colnames(raw_counts) <- colData(raw_sce)$Barcode
-
-# barcode rank + emptyDrops on the raw counts
-bcrank <- barcodeRanks(raw_counts)
-plot_df <- as.data.frame(bcrank[!duplicated(bcrank$rank), ])
-ggplot(plot_df, aes(rank, total)) + geom_point(size=0.5) + geom_hline(yintercept=metadata(bcrank)$knee, color="red")
-
-set.seed(42)
-e.out <- emptyDrops(raw_counts)
-e.out <- e.out[order(e.out$FDR), ]
-
-# choose threshold (you used 0.001)
-cell_sel <- rownames(e.out)[e.out$FDR < 0.001]
-
-# create cell-only matrix from the raw counts (no format-matching surprises)
-cell_mtx <- raw_counts[, intersect(colnames(raw_counts), cell_sel), drop = FALSE]
-
-# ambient profile from emptyDrops metadata (same shape as rownames of counts)
-amb <- metadata(e.out)$ambient[,1]
-
-
-# 1) fraction of cells expressing some marker before/after
-markers <- c("CD3E","MS4A1","CD14","HBB")
-pct_expr <- function(seu, genes){
-  DefaultAssay(seu) <- "RNA"
-  m <- as.matrix(GetAssayData(seu, slot="counts"))
-  sapply(genes, function(g) mean(m[g,] > 0, na.rm=TRUE))
-}
-# compute after you have seu_wo and seu_with
-pct_expr(seu_list$woCorr, markers)
-pct_expr(seu_list$withCorr, markers)
-
-# 2) visual check: violin + UMAP comparisons 
-DimPlot(seu_list$woCorr, label=TRUE)
-DimPlot(seu_list$withCorr, label=TRUE)
-
 
